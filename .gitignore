@@ -1,0 +1,8 @@
+.clerk/
+.cpcache/
+.env
+.lsp/
+target/
+node_modules/
+__pycache__/
+*.class

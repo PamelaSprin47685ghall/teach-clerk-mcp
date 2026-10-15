@@ -1,0 +1,27 @@
+:root { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; color: #1c2530; background: #fff; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+.layout { display: flex; flex-direction: column; height: 100dvh; min-height: 320px; }
+.topbar { flex: 0 0 auto; height: 55px; display: flex; align-items: center; justify-content: space-between; padding: 0 max(18px, calc((100% - 900px)/2)); border-bottom: 1px solid #e8ebf0; background: #fff; z-index: 2; }
+.brand { display: flex; align-items: center; gap: 9px; font-size: 14px; white-space: nowrap; }
+.brand .logo { font-size: 23px; color: #725ad2; }
+.subtitle { font-size: 12px; color: #87909d; padding-left: 10px; border-left: 1px solid #dde1e7; }
+.status { border-radius: 9px; padding: 5px 9px; font-size: 12px; background: #f5f6f8; color: #626c79; }
+.canvas { flex: 1 1 auto; min-height: 0; position: relative; background: #fff; }
+#board { width: 100%; height: 100%; border: none; display: block; }
+.to-bottom { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); border: 1px solid #dbe0e8; background: #fff; color: #354057; border-radius: 20px; padding: 7px 15px; box-shadow: 0 3px 14px #26355218; cursor: pointer; }
+.composer { flex: 0 0 auto; border-top: 1px solid #e9edf2; background: #fff; padding: 11px 18px 16px; z-index: 2; }
+.compose-inner { max-width: 850px; margin: 0 auto; }
+textarea { resize: none; display: block; width: 100%; min-height: 60px; max-height: 180px; border: 1px solid #d9dee7; border-radius: 13px; font: inherit; font-size: 15px; line-height: 1.5; padding: 12px 14px; outline: 0; }
+textarea:focus { border-color: #9886dc; box-shadow: 0 0 0 3px #7560d314; }
+textarea:disabled { background: #f8f9fb; color: #929bab; }
+.controls { display: flex; justify-content: space-between; align-items: center; padding: 9px 1px 0; }
+.hint { font-size: 12px; color: #a0a6af; }
+.buttons { display: flex; gap: 8px; }
+button { font: inherit; cursor: pointer; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.primary, .secondary { border-radius: 9px; padding: 8px 16px; font-size: 13px; font-weight: 600; }
+.primary { background: #292b35; color: #fff; border: 1px solid #292b35; }
+.secondary { background: #fff; color: #525f6b; border: 1px solid #dde1e7; }
+.message { height: 14px; margin: 3px 2px 0; font-size: 12px; color: #9a4b4b; }
+@media (max-width: 580px) { .subtitle, .hint { display: none; } .topbar { padding: 0 14px; } .composer { padding: 10px 12px 14px; } }

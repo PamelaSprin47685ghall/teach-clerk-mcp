@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: teach-clerk-mcp
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: MCP_API_KEY
+        sync: false
+      - key: ROOM_TOKEN
+        generateValue: true
+      - key: PUBLIC_BASE_URL
+        sync: false
