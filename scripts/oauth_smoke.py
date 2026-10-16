@@ -324,9 +324,51 @@ def main():
             token=access, id=47
         )
         assert finished["result"]["structuredContent"]["closed"] is True
+
+        # ChatGPT/MCP may negotiate SSE rather than application/json.
+        # Verify that the successful timeout event terminates that stream.
+        status, _, data = request("/api/session", {})
+        assert status == 200
+        streamed_student = json.loads(data)
+        body = json.dumps(
+            {"jsonrpc": "2.0", "id": 48, "method": "tools/call",
+             "params": {"name": "teach_then_ask",
+                        "arguments": {
+                            "pairing_code": streamed_student["pairing_code"],
+                            "source": '(clerk/md "## SSE 慢回答")'
+                        }}}).encode()
+        streaming_request = urllib.request.Request(
+            BASE + "/mcp",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json",
+                     "Accept": "text/event-stream, application/json",
+                     "Authorization": "Bearer " + access}
+        )
+        streamed_result = None
+        with client.open(streaming_request, timeout=15) as stream:
+            assert "text/event-stream" in stream.headers["Content-Type"]
+            for line in stream:
+                if line.startswith(b"data: "):
+                    streamed_result = json.loads(line[6:])
+                    break
+        assert streamed_result is not None
+        assert (streamed_result["result"]["structuredContent"]["status"]
+                == "student_timeout")
+        status, _, data = request(
+            "/api/state?tab="
+            + urllib.parse.quote(streamed_student["tab_token"])
+        )
+        assert json.loads(data)["pending"] is True
+        status, _, data = request(
+            "/api/close",
+            json.dumps({"tab_token": streamed_student["tab_token"]}),
+            headers={"Content-Type": "application/json", "Origin": BASE}
+        )
+        assert status == 200
         print("PASS: timeout returns before client deadline, keeps textbox,"
-              " rejects premature end, delivers late reply, and permits a"
-              " nonblocking follow-up before the student answers")
+              " rejects premature end, delivers late reply, permits a"
+              " nonblocking follow-up, and terminates SSE correctly")
 
     elif os.environ.get("RUN_CLASSROOM_LOOP") == "1":
         students = []
