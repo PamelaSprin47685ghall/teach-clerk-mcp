@@ -109,6 +109,29 @@ sequence of Clerk viewers directly, e.g.:
 Such collections become an implicit Clerk fragment and render each viewer
 normally. Ordinary data vectors such as [1 2 3] remain plain data.
 
+### Teaching methodology is embedded in MCP
+
+The model sees educational guidance in BOTH the initialize instructions
+and the teach_then_ask tool description, not only in this README:
+
+- Prefer open, explanatory, predictive and exploratory questions over routine
+  yes/no checks (unless a focused closed question diagnoses a misconception).
+- Use carefully graduated hints, counterexamples and independent transfer
+  exercises; a prompted correct answer does not yet prove mastery.
+- Preserve the craft of the classroom blackboard: a coherent, cumulative
+  argument with definitions, diagrams, derivations, observations, conclusions
+  and practice, rather than a stream of bare questions.
+- Generate purposeful visuals: mathematical TeX, SVG vector illustrations,
+  plots, algorithm visualizations and calculated tables. The restricted
+  SVG viewer supports basic shapes, labels, arrows, markers and gradients.
+- Respect student thinking time. An unanswered prompt does not authorize
+  the teacher to reveal the answer, end the lesson, or fill the board with
+  unnecessary text.
+
+These are pedagogical principles, not a forced step-by-step lesson state
+machine. Course GOAL, student understanding, and the teacher's judgment
+remain primary.
+
 ## Isolated, incremental Clerk Notebooks
 
 One Clerk Notebook template is initialized when Java starts. Each browser

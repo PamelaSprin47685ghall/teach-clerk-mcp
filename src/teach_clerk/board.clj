@@ -5,13 +5,18 @@
             [teach-clerk.rooms :as rooms]))
 
 (def svg-tags
-  #{:svg :g :path :circle :rect :line :polyline :polygon :ellipse :text})
+  #{:svg :g :path :circle :rect :line :polyline :polygon :ellipse :text :tspan
+    :defs :linearGradient :radialGradient :stop :clipPath :marker})
 (def html-tags
   #{:div :span :p :strong :em :small :ul :ol :li :table :tr :th :td :h1 :h2 :h3 :pre :code})
 (def html-attrs
   #{:class :id :title :width :height :viewBox :d :x :y :x1 :y1 :x2 :y2
     :cx :cy :r :rx :ry :points :fill :stroke :stroke-width :font-size
-    :text-anchor :transform :colSpan :rowSpan})
+    :text-anchor :transform :colSpan :rowSpan
+    :opacity :fill-opacity :stroke-opacity :stroke-dasharray :stroke-linecap
+    :stroke-linejoin :font-family :font-weight :font-style :vector-effect
+    :marker-start :marker-end :clip-path :offset :stop-color :stop-opacity
+    :gradientUnits :markerWidth :markerHeight :refX :refY :orient})
 
 (defn- clean-hiccup [x]
   (cond

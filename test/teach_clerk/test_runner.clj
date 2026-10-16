@@ -3,6 +3,7 @@
             [teach-clerk.board-test]
             [teach-clerk.entrypoint-test]
             [teach-clerk.oauth-test]
+            [teach-clerk.pedagogy-test]
             [teach-clerk.rooms-test]
             [teach-clerk.sandbox-test]
             [teach-clerk.worker-test]))
@@ -13,6 +14,7 @@
                                'teach-clerk.entrypoint-test
                                'teach-clerk.sandbox-test
                                'teach-clerk.worker-test
-                               'teach-clerk.oauth-test)]
+                               'teach-clerk.oauth-test
+                               'teach-clerk.pedagogy-test)]
     (when (pos? (+ (:fail result) (:error result)))
       (System/exit 1))))

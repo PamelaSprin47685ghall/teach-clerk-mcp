@@ -8,7 +8,8 @@
             [teach-clerk.board :as board]
             [teach-clerk.notebooks :as notebooks]
             [teach-clerk.sandbox :as sandbox]
-            [teach-clerk.entrypoint :as entrypoint])
+            [teach-clerk.entrypoint :as entrypoint]
+            [teach-clerk.pedagogy :as pedagogy])
   (:import [java.util.concurrent Executors ScheduledExecutorService TimeUnit]))
 
 (defonce !streams (atom #{}))
@@ -120,7 +121,8 @@
          "A late_student_reply result contains a delayed real answer: "
          "respond to it by calling teach_then_ask again. "
          "The student is the teacher's observation, not their task-giver. "
-         "Keep the requested GOAL and teaching style in your own context.")
+         "Keep the requested GOAL and teaching style in your own context. "
+         pedagogy/teaching-methodology)
     :securitySchemes [{:type "oauth2" :scopes [oauth/scope-name]}]
     :inputSchema {:type "object"
                   :properties
@@ -128,7 +130,13 @@
                                   :description "Six digits copied by the student from the classroom tab"}
                    :source {:type ["string" "null"]
                             :maxLength 20000
-                            :description "Single Clojure expression, or null to end lesson"}}
+                            :description
+                            (str "Executable Clojure expression for a beautiful, "
+                                 "purposeful Clerk lesson board (TeX, SVG "
+                                 "vector diagram, generated table, plot, "
+                                 "explanation and/or meaningful prompt), "
+                                 "or null to end lesson. "
+                                 "A vector of Clerk viewers is welcome.")}}
                   :required ["pairing_code" "source"]
                   :additionalProperties false}}
    (entrypoint/tool)])
@@ -329,7 +337,8 @@
                       "returns status=student_timeout or late_student_reply, "
                       "you MUST invoke teach_then_ask again with the same code "
                       "and a non-null source. Do not finish or deliver a final "
-                      "ChatGPT response after a timeout.")}))
+                      "ChatGPT response after a timeout. "
+                      pedagogy/bootstrap-methodology)}))
           (= "ping" method) (oauth/json-response 200 (rpc id {}))
           (= "tools/list" method)
           (oauth/json-response 200 (rpc id {:tools (tools)}))
