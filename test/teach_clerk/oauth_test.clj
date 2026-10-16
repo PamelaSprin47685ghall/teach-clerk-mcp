@@ -124,6 +124,9 @@
                   :query-string (form args)})]
       (is (= 200 (:status login)))
       (is (str/includes? (:body login) "同意连接 ChatGPT"))
+      (is (not (str/includes?
+                (get-in login [:headers "content-security-policy"])
+                "form-action")))
       (let [redirect (authorize! args)
             code (get redirect "code")
             params {"grant_type" "authorization_code"

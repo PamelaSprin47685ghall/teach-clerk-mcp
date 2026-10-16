@@ -244,7 +244,11 @@
               "x-frame-options" "DENY"
               "referrer-policy" "no-referrer"
               "content-security-policy"
-              (str "default-src 'none'; form-action 'self'; "
+              ;; Do not set form-action here. Browsers apply that directive to
+              ;; the entire OAuth redirect chain, not only the first POST.
+              ;; ChatGPT may redirect from chatgpt.com to platform.openai.com,
+              ;; and a form-action allowlist would silently block consent.
+              (str "default-src 'none'; "
                    "style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")}
     :body (str
            "<!doctype html><html lang=\"zh\"><meta charset=\"utf-8\">"
