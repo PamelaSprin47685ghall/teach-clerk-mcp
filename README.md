@@ -6,8 +6,10 @@ browser tab owns a private, in-memory Clerk Notebook.
 
 ## Student workflow
 
-1. Connect the MCP URL to ChatGPT using **OAuth**. No API key or OAuth client
-   credentials need to be entered. Confirm the browser consent screen.
+1. Connect the MCP URL to ChatGPT using **No authentication** (no OAuth,
+   API key, username or bearer token). **OAuth remains available** as an
+   alternative; choose OAuth if you want the connection tied to an OAuth grant.
+   Both methods use the same server URL and teaching tool.
 2. Open https://teach-clerk-mcp.onrender.com/ in another browser tab.
    A private Notebook and a six-digit pairing code appear.
 3. Copy the prompt into the ChatGPT conversation in which Teach Clerk is
@@ -151,6 +153,32 @@ There are no static MCP keys. The browser consent screen creates an anonymous
 OAuth principal; this is not a verified real-world identity or an account.
 The paired room is bound to the principal created by the OAuth consent.
 
+### Optional authentication: No authentication or OAuth
+
+Both of the following work with the **same** MCP URL:
+
+- **No authentication** (default/simple path): MCP initialize, tool
+  discovery, the ChatGPT UI entrypoint, and teach_then_ask can all be
+  called without any Authorization header. The six-digit pairing code
+  locates the student's room and binds it to the anonymous connection
+  mode. Follow-up calls need only the same code.
+- **OAuth** (optional): follow the existing authorization-code + PKCE
+  sign-in, then include a valid bearer token. The paired room remains
+  bound to that OAuth grant. An invalid or expired Authorization header
+  returns HTTP 401; it is **not** silently treated as anonymous.
+
+Each tool advertises BOTH security schemes (noauth and oauth2) in its
+descriptor and compatibility metadata. OAuth discovery remains active for
+clients that choose OAuth. If a room was first paired in one mode, changing
+auth modes requires opening a fresh student classroom tab.
+
+**Privacy trade-off:** anonymous mode does NOT authenticate the teacher
+or identify the student. The six-digit code acts as a short bearer
+capability. A person who learns or guesses a live code may try to
+interact with that room; per-client failed-attempt throttling is only
+a best-effort mitigation, not strong access control. Avoid sensitive
+personal data or high-stakes use in anonymous classrooms.
+
 ## Run and test
 
 Requires Java 21+ and the Clojure CLI:
@@ -163,6 +191,7 @@ Requires Java 21+ and the Clojure CLI:
     clojure -M:test
     node --check resources/public/classroom.js
     bash scripts/oauth_smoke_local.sh
+    bash scripts/anonymous_smoke_local.sh
     bash scripts/timeout_smoke_local.sh
 
 The smoke test covers OAuth, token refresh, code replay, two concurrent

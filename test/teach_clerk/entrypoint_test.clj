@@ -37,6 +37,11 @@
              (set (map #(get % "name") descriptors))))
       (is (= ["pairing_code" "source"]
              (get-in teach ["inputSchema" "required"])))
+      (is (= [{"type" "noauth"}
+              {"type" "oauth2" "scopes" ["teacher.teach"]}]
+             (get ui "securitySchemes")))
+      (is (= (get ui "securitySchemes")
+             (get-in ui ["_meta" "securitySchemes"])))
       (is (= ["app"] (get-in ui ["_meta" "ui" "visibility"])))
       (is (= entrypoint/uri
              (get-in ui ["_meta" "ui" "resourceUri"])))
@@ -79,9 +84,18 @@
              (mapv #(get-in % ["result" "structuredContent" "connected"])
                    results)))
       (is (every? #(not (get-in % ["result" "isError"])) results))
-      (is (= 401 (:status denied)))
-      (is (re-find #"resource_metadata"
-                   (get-in denied [:headers "www-authenticate"])))
+      (is (= 200 (:status denied)))
+      (is (= true
+             (get-in (json/read-str (:body denied))
+                     ["result" "structuredContent" "connected"])))
+      (is (= 401
+             (:status (mcp/handle
+                       (assoc-in (request 10 "tools/call"
+                                          {:name "open_teach_clerk"
+                                           :arguments {}}
+                                          nil)
+                                 [:headers "authorization"]
+                                 "Bearer expired-or-fake")))))
       (is (= true
              (get-in (rpc! 9 "tools/call"
                             {:name "open_teach_clerk" :arguments {}} token)

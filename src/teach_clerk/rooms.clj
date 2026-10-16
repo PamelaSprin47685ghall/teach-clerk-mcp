@@ -62,7 +62,8 @@
   (locking (:state room)
     (let [old (:principal (snapshot room))]
       (when (or (nil? principal) (and old (not= old principal)))
-        (throw (ex-info "This pairing code belongs to another login"
+        (throw (ex-info
+                "This classroom is already bound to a different connection or authentication mode"
                         {:kind :pairing})))
       (when-not old
         (swap! (:state room) (fn [s]

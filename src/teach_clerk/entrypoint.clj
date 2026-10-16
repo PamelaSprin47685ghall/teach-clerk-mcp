@@ -14,9 +14,12 @@
    :inputSchema {:type "object"
                  :properties {}
                  :additionalProperties false}
-   :securitySchemes [{:type "oauth2" :scopes [oauth/scope-name]}]
+   :securitySchemes [{:type "noauth"}
+                     {:type "oauth2" :scopes [oauth/scope-name]}]
    :_meta {:ui {:resourceUri uri
                 :visibility ["app"]}
+           "securitySchemes" [{:type "noauth"}
+                              {:type "oauth2" :scopes [oauth/scope-name]}]
            "openai/ui" {:entrypoints [{:type "thread"} {:type "global"}]}
            "openai/outputTemplate" uri}})
 
@@ -43,7 +46,9 @@
        "code{border-radius:6px;padding:2px 6px;background:#8882}"
        ".note{font-size:13px;opacity:.75}"
        "</style></head><body><main>"
-       "<h1>Teach Clerk 已连接</h1>"
+       "<h1>Teach Clerk 课堂</h1>"
+       "<p>支持免登录连接或可选 OAuth 授权；"
+       "选择免登录时无需账号、API Key 或访问令牌。</p>"
        "<p>学生使用另一个浏览器标签页学习，"
        "AI 教师通过同一会话中的 <code>teach_then_ask</code> "
        "持续生成 Clerk 白板并等待回答。</p>"

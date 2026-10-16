@@ -90,27 +90,47 @@
                                 {"redirect_uris" [callback]
                                  "token_endpoint_auth_method" "client_secret_post"})))))))
 
-(deftest unauthorized-mcp-advertises-oauth
+(deftest anonymous-mcp-advertises-optional-oauth
   (binding [oauth/*settings* settings]
     (let [probe (main/app {:uri "/mcp" :request-method :get})
           list-result (main/app (json-post
                                  "/mcp"
                                  {"jsonrpc" "2.0" "id" 1 "method" "tools/list"}))
           info (-> list-result json-result (get "result") (get "tools") first)
-          refused (main/app (json-post
+          missing-code (main/app (json-post
                               "/mcp"
                               {"jsonrpc" "2.0" "id" 2 "method" "tools/call"
                                "params" {"name" "teach_then_ask"
-                                         "arguments" {"pairing_code" "123456"
-                                                      "source" nil}}}))]
-      (is (= 401 (:status probe)))
-      (is (str/includes? (get-in probe [:headers "www-authenticate"])
-                         "/.well-known/oauth-protected-resource"))
-      (is (= [{"type" "oauth2" "scopes" [oauth/scope-name]}]
+                                         "arguments" {"pairing_code" "999999"
+                                                      "source" nil}}}))
+          wrong-bearer (main/app
+                        (assoc-in (json-post
+                                   "/mcp"
+                                   {"jsonrpc" "2.0" "id" 3 "method" "tools/call"
+                                    "params" {"name" "teach_then_ask"
+                                              "arguments" {"pairing_code" "999999"
+                                                           "source" nil}}})
+                                  [:headers "authorization"] "Bearer invalid-token"))]
+      ;; A public endpoint can decline SSE GET with 405, not with 401 OAuth.
+      (is (= 405 (:status probe)))
+      (is (= "POST" (get-in probe [:headers "allow"])))
+      (is (= [{"type" "noauth"}
+              {"type" "oauth2" "scopes" [oauth/scope-name]}]
              (get info "securitySchemes")))
+      (is (= (get info "securitySchemes")
+             (get-in info ["_meta" "securitySchemes"])))
       (is (not (str/includes? (:body list-result) "/room/")))
-      (is (= 401 (:status refused)))
-      (is (str/includes? (get-in refused [:headers "www-authenticate"])
+      ;; No token: permitted through auth checks, then the tool reports the
+      ;; missing pairing code as a normal tool error.
+      (is (= 200 (:status missing-code)))
+      (is (= true (get-in (json-result missing-code)
+                          ["result" "isError"])))
+      (is (str/includes? (get-in (json-result missing-code)
+                                ["result" "content" 0 "text"])
+                         "Pairing code not found"))
+      ;; Bad explicit authorization must NEVER fall back to anonymous mode.
+      (is (= 401 (:status wrong-bearer)))
+      (is (str/includes? (get-in wrong-bearer [:headers "www-authenticate"])
                          "/.well-known/oauth-protected-resource")))))
 
 (deftest login-token-refresh-and-replay-protection

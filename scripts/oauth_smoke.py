@@ -96,11 +96,17 @@ def main():
     resource = mcp("resources/read", {"uri": uri})["result"]["contents"][0]
     assert resource["mimeType"] == "text/html;profile=mcp-app"
     assert "teach_then_ask" in resource["text"]
+    missing = mcp("tools/call", {
+        "name": "teach_then_ask",
+        "arguments": {"pairing_code": "999999", "source": None}
+    }, id=17)
+    assert missing["result"]["isError"] is True
+    assert "Pairing code not found" in missing["result"]["content"][0]["text"]
     denied, denied_headers, _ = request("/mcp", {
         "jsonrpc": "2.0", "method": "tools/call", "id": 17,
         "params": {"name": "teach_then_ask",
                    "arguments": {"pairing_code": "000000", "source": None}}
-    })
+    }, headers={"Authorization": "Bearer invalid-token"})
     assert denied == 401
     challenge = next((v for k, v in denied_headers.items()
                       if k.lower() == "www-authenticate"), "")
@@ -163,7 +169,86 @@ def main():
     assert code == 200, (code, body)
     assert json.loads(body)["access_token"]
 
-    if os.environ.get("RUN_TIMEOUT_LOOP") == "1":
+    if os.environ.get("RUN_MIXED_MODE_LOOP") == "1":
+        def new_student():
+            status, _, data = request("/api/session", {})
+            assert status == 200
+            return json.loads(data)
+
+        def wait_question(tab):
+            for _ in range(120):
+                status, _, data = request(
+                    "/api/state?tab=" + urllib.parse.quote(tab))
+                if status == 200 and json.loads(data)["pending"]:
+                    return json.loads(data)["question_id"]
+                time.sleep(0.1)
+            raise AssertionError("No pending question for classroom")
+
+        def answer(student, qid, message):
+            status, _, data = request(
+                "/api/answer",
+                json.dumps({"tab_token": student["tab_token"],
+                            "question_id": qid,
+                            "text": message}),
+                headers={"Content-Type": "application/json", "Origin": BASE})
+            assert status == 200, (status, data)
+
+        for anonymous_first in [True, False]:
+            student = new_student()
+            pair = student["pairing_code"]
+            first_auth = None if anonymous_first else access
+            other_auth = access if anonymous_first else None
+            observed = []
+
+            def teaching():
+                observed.append(mcp(
+                    "tools/call",
+                    {"name": "teach_then_ask",
+                     "arguments": {
+                         "pairing_code": pair,
+                         "source": '(clerk/md "## 身份隔离测试")'
+                     }},
+                    token=first_auth, id=75))
+
+            try:
+                thread = threading.Thread(target=teaching)
+                thread.start()
+                qid = wait_question(student["tab_token"])
+                takeover = mcp(
+                    "tools/call",
+                    {"name": "teach_then_ask",
+                     "arguments": {
+                         "pairing_code": pair,
+                         "source": '(clerk/md "不应该出现的板书")'
+                     }},
+                    token=other_auth, id=76)
+                assert takeover["result"]["isError"] is True, takeover
+                assert "different connection" in takeover["result"]["content"][0]["text"]
+                answer(student, qid, "我会解释")
+                thread.join(30)
+                assert not thread.is_alive()
+                assert observed[0]["result"]["structuredContent"]["student_reply"] == "我会解释"
+                status, _, data = request(
+                    "/_clerk?tab=" + urllib.parse.quote(student["tab_token"]))
+                assert status == 200
+                assert "不应该出现的板书" not in data
+                finished = mcp(
+                    "tools/call",
+                    {"name": "teach_then_ask",
+                     "arguments": {"pairing_code": pair, "source": None}},
+                    token=first_auth, id=77)
+                assert finished["result"]["structuredContent"]["closed"] is True
+            finally:
+                request(
+                    "/api/close",
+                    json.dumps({"tab_token": student["tab_token"]}),
+                    headers={"Content-Type": "application/json",
+                             "Origin": BASE})
+
+        print("PASS: OAuth and anonymous classrooms both work and cannot "
+              "take over each other's pairing codes")
+
+    elif os.environ.get("RUN_TIMEOUT_LOOP") == "1":
         status, _, data = request("/api/session", {})
         assert status == 200
         student = json.loads(data)
