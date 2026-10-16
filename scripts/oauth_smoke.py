@@ -145,7 +145,190 @@ def main():
     assert code == 200, (code, body)
     assert json.loads(body)["access_token"]
 
-    if os.environ.get("RUN_CLASSROOM_LOOP") == "1":
+    if os.environ.get("RUN_TIMEOUT_LOOP") == "1":
+        status, _, data = request("/api/session", {})
+        assert status == 200
+        student = json.loads(data)
+        pairing_code = student["pairing_code"]
+        tab = student["tab_token"]
+
+        first_prompt = '(clerk/md "## 第一题：请慢慢思考")'
+        started = time.monotonic()
+        timed_out = mcp("tools/call",
+                        {"name": "teach_then_ask",
+                         "arguments": {"pairing_code": pairing_code,
+                                       "source": first_prompt}},
+                        token=access, id=40)
+        elapsed = time.monotonic() - started
+        observation = timed_out["result"]["structuredContent"]
+        assert 1 <= elapsed <= 15, elapsed
+        assert observation["status"] == "student_timeout", timed_out
+        assert observation["must_call_again"] is True
+        assert observation["student_still_thinking"] is True
+        assert timed_out["result"].get("isError") is not True
+        assert "MANDATORY NEXT ACTION" in timed_out["result"]["content"][0]["text"]
+
+        status, _, state_body = request(
+            "/api/state?tab=" + urllib.parse.quote(tab)
+        )
+        assert status == 200
+        state = json.loads(state_body)
+        assert state["pending"] is True
+        assert state["student_timed_out"] is True
+        previous_qid = state["question_id"]
+
+        premature_end = mcp("tools/call",
+                            {"name": "teach_then_ask",
+                             "arguments": {"pairing_code": pairing_code,
+                                           "source": None}},
+                            token=access, id=41)
+        assert premature_end["result"]["isError"] is True
+        assert "MUST call teach_then_ask again" in (
+            premature_end["result"]["content"][0]["text"]
+        )
+        status, _, state_body = request(
+            "/api/state?tab=" + urllib.parse.quote(tab)
+        )
+        assert json.loads(state_body)["pending"] is True
+
+        # The student is slow, not gone: the original textbox still accepts.
+        status, _, body = request(
+            "/api/answer",
+            json.dumps({"tab_token": tab,
+                        "question_id": previous_qid,
+                        "text": "终于算出来了"}),
+            headers={"Content-Type": "application/json", "Origin": BASE}
+        )
+        assert status == 200, (status, body)
+        late = mcp("tools/call",
+                   {"name": "teach_then_ask",
+                    "arguments": {"pairing_code": pairing_code,
+                                  "source": '(clerk/md "这条提示暂时不要显示")'}},
+                   token=access, id=42)
+        delayed = late["result"]["structuredContent"]
+        assert delayed["status"] == "late_student_reply", late
+        assert delayed["student_reply"] == "终于算出来了"
+        assert delayed["must_call_again"] is True
+        assert "MANDATORY NEXT ACTION" in late["result"]["content"][0]["text"]
+
+        status, _, html = request("/_clerk?tab=" + urllib.parse.quote(tab))
+        assert status == 200
+        assert "这条提示暂时不要显示" not in html
+        assert "第一题" in html
+
+        followup = []
+        def continue_teacher():
+            followup.append(mcp(
+                "tools/call",
+                {"name": "teach_then_ask",
+                 "arguments": {"pairing_code": pairing_code,
+                               "source": '(clerk/md "## 第二题：再来一次")'}},
+                token=access, id=43
+            ))
+
+        teacher = threading.Thread(target=continue_teacher)
+        teacher.start()
+        next_question_id = None
+        for _ in range(100):
+            status, _, body = request(
+                "/api/state?tab=" + urllib.parse.quote(tab)
+            )
+            data = json.loads(body)
+            if data["pending"] and data["question_id"] != previous_qid:
+                next_question_id = data["question_id"]
+                break
+            time.sleep(0.05)
+        assert next_question_id is not None, "Agent must be able to continue teaching"
+        status, _, body = request(
+            "/api/answer",
+            json.dumps({"tab_token": tab,
+                        "question_id": next_question_id,
+                        "text": "第二题也完成了"}),
+            headers={"Content-Type": "application/json", "Origin": BASE}
+        )
+        assert status == 200, (status, body)
+        teacher.join(20)
+        assert not teacher.is_alive()
+        assert followup[0]["result"]["structuredContent"]["student_reply"] == "第二题也完成了"
+        finished = mcp("tools/call",
+                       {"name": "teach_then_ask",
+                        "arguments": {"pairing_code": pairing_code,
+                                      "source": None}},
+                       token=access, id=44)
+        assert finished["result"]["structuredContent"]["closed"] is True
+
+        # Second classroom: the teacher follows up BEFORE the slow student
+        # answers. The timeout must not block the next teaching tool call.
+        status, _, data = request("/api/session", {})
+        assert status == 200
+        slow_student = json.loads(data)
+        slow_code = slow_student["pairing_code"]
+        slow_tab = slow_student["tab_token"]
+        first_slow = mcp(
+            "tools/call",
+            {"name": "teach_then_ask",
+             "arguments": {"pairing_code": slow_code,
+                           "source": '(clerk/md "## 请先思考这道题")'}},
+            token=access, id=45
+        )
+        assert first_slow["result"]["structuredContent"]["status"] == "student_timeout"
+        status, _, data = request(
+            "/api/state?tab=" + urllib.parse.quote(slow_tab)
+        )
+        old_id = json.loads(data)["question_id"]
+        next_slow = []
+
+        def followup_before_answer():
+            next_slow.append(mcp(
+                "tools/call",
+                {"name": "teach_then_ask",
+                 "arguments": {"pairing_code": slow_code,
+                               "source": '(clerk/md "你可以再想一想，我在这里等你。")'}},
+                token=access, id=46
+            ))
+
+        followup_thread = threading.Thread(target=followup_before_answer)
+        followup_thread.start()
+        next_id = None
+        for _ in range(100):
+            status, _, data = request(
+                "/api/state?tab=" + urllib.parse.quote(slow_tab)
+            )
+            state = json.loads(data)
+            if state["pending"] and state["question_id"] != old_id:
+                next_id = state["question_id"]
+                break
+            time.sleep(0.05)
+        assert next_id is not None, "Teacher follow-up must replace expired wait"
+        status, _, data = request(
+            "/api/answer",
+            json.dumps({"tab_token": slow_tab,
+                        "question_id": next_id,
+                        "text": "现在可以回答了"}),
+            headers={"Content-Type": "application/json", "Origin": BASE}
+        )
+        assert status == 200, (status, data)
+        followup_thread.join(20)
+        assert not followup_thread.is_alive()
+        assert next_slow[0]["result"]["structuredContent"]["student_reply"] == "现在可以回答了"
+        status, _, data = request(
+            "/_clerk?tab=" + urllib.parse.quote(slow_tab)
+        )
+        assert status == 200
+        assert "你可以再想一想" in data
+        assert "请先思考这道题" in data
+        finished = mcp(
+            "tools/call",
+            {"name": "teach_then_ask",
+             "arguments": {"pairing_code": slow_code, "source": None}},
+            token=access, id=47
+        )
+        assert finished["result"]["structuredContent"]["closed"] is True
+        print("PASS: timeout returns before client deadline, keeps textbox,"
+              " rejects premature end, delivers late reply, and permits a"
+              " nonblocking follow-up before the student answers")
+
+    elif os.environ.get("RUN_CLASSROOM_LOOP") == "1":
         students = []
         for _ in range(2):
             status, _, data = request("/api/session", {})

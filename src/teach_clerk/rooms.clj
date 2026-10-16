@@ -37,6 +37,8 @@
                 :code code
                 :state (atom {:events [] :next-id 1 :pending nil
                               :content-chars 0
+                              :late-answers []
+                              :must-continue? false
                               :closed? false :revision 0 :principal nil})
                 :last-seen (atom (now))
                 :view (atom nil)
@@ -53,6 +55,7 @@
 (defn status [room]
   (let [{:keys [pending closed? revision principal]} (snapshot room)]
     {:pending (boolean pending) :question_id (:id pending)
+     :student_timed_out (boolean (:timed-out? pending))
      :closed closed? :paired (boolean principal) :revision revision}))
 
 (defn pair! [room principal]
@@ -70,27 +73,76 @@
 
 (defn begin! [room source value]
   (locking (:state room)
-    (let [{:keys [pending closed? next-id content-chars]} (snapshot room)
-          added (+ (count source) (count (pr-str value)))]
-      (when (or pending closed?)
-        (throw (ex-info (if closed? "Lesson ended" "Question already pending")
-                        {:kind :conflict})))
-      (when (> (+ content-chars added) max-notebook-chars)
-        (throw (ex-info "This Notebook is full. Open a new classroom tab."
-                        {:kind :capacity})))
-      (let [reply (promise)
-            done (java.util.concurrent.CompletableFuture.)]
+    (let [{:keys [pending closed? next-id content-chars late-answers]} (snapshot room)
+          added (+ (count source) (count (pr-str value)))
+          silent? (and (map? value)
+                       (= :fragment (:teach/view value))
+                       (empty? (:teach/value value)))]
+      (when closed?
+        (throw (ex-info "Lesson ended" {:kind :conflict})))
+      (if (seq late-answers)
+        (let [first-answer (first late-answers)]
+          (swap! (:state room) update :late-answers #(vec (rest %)))
+          {:late-answer first-answer})
+        (do
+          (when (and pending (not (:timed-out? pending)))
+            (throw (ex-info "Question already pending" {:kind :conflict})))
+          (when (> (+ content-chars added) max-notebook-chars)
+            (throw (ex-info "This Notebook is full. Open a new classroom tab."
+                            {:kind :capacity})))
+          (let [reply (promise)
+                done (java.util.concurrent.CompletableFuture.)]
+            (swap! (:state room)
+                   (fn [s]
+                     (-> s
+                         (update :events conj {:id next-id :role :teacher
+                                               :source source :value value
+                                               :silent? silent?})
+                         (assoc :pending {:id next-id :reply reply :done done})
+                         (assoc :must-continue? false)
+                         (update :content-chars + added)
+                         (update :next-id inc)
+                         (update :revision inc))))
+            (touch! room)
+            {:id next-id :reply reply :done done}))))))
+
+(defn take-late-answer! [room]
+  "Take an answer submitted after the previous MCP request timed out.
+   A future teacher call sees that answer before publishing stale hints."
+  (locking (:state room)
+    (let [late (:late-answers (snapshot room))]
+      (when (seq late)
+        (swap! (:state room) update :late-answers #(vec (rest %)))
+        (first late)))))
+
+(defn timeout! [room id]
+  "End the current MCP wait, but keep the question and student textbox alive.
+   The next teacher tool call may replace this timed-out question."
+  (locking (:state room)
+    (let [{:keys [pending closed?]} (snapshot room)]
+      (when (and (not closed?)
+                 pending (= id (:id pending))
+                 (not (:timed-out? pending)))
         (swap! (:state room)
-               (fn [s]
-                 (-> s
-                     (update :events conj {:id next-id :role :teacher
-                                           :source source :value value})
-                     (assoc :pending {:id next-id :reply reply :done done})
-                     (update :content-chars + added)
-                     (update :next-id inc)
-                     (update :revision inc))))
-        (touch! room)
-        {:id next-id :reply reply :done done}))))
+               (fn [s] (-> s
+                           (assoc-in [:pending :timed-out?] true)
+                           (assoc :must-continue? true))))
+        (.complete ^java.util.concurrent.CompletableFuture
+                   (:done pending) ::timeout)
+        true))))
+
+(declare abandon!)
+
+(defn abandon-active! [room id]
+  "Cancel only a live, unanswered tool call. A completed timeout is no longer
+   attached to its HTTP connection; its question must stay answerable."
+  (when room
+    (locking (:state room)
+      (let [pending (:pending (snapshot room))]
+        (when (and pending
+                   (= id (:id pending))
+                   (not (:timed-out? pending)))
+          (abandon! room id))))))
 
 (defn answer! [room id text]
   (locking (:state room)
@@ -102,10 +154,13 @@
         (throw (ex-info "Reply must be text or null" {:kind :invalid})))
       (swap! (:state room)
              (fn [s]
-               (-> s (assoc :pending nil)
-                   (update :events conj {:id next-id :role :student :text text})
-                   (update :next-id inc)
-                   (update :revision inc))))
+               (cond-> (-> s (assoc :pending nil)
+                           (update :events conj {:id next-id :role :student
+                                                 :text text})
+                           (update :next-id inc)
+                           (update :revision inc))
+                 (:timed-out? pending)
+                 (update :late-answers conj {:question_id id :student_reply text}))))
       (touch! room)
       (deliver (:reply pending) text)
       (.complete ^java.util.concurrent.CompletableFuture (:done pending) text)
@@ -130,7 +185,13 @@
 
 (defn finish! [room]
   (locking (:state room)
-    (let [{:keys [pending next-id closed?]} (snapshot room)]
+    (let [{:keys [pending next-id closed? must-continue?]} (snapshot room)]
+      (when must-continue?
+        (throw (ex-info
+                (str "Student timed out, which is not mastery or consent to end. "
+                     "You MUST call teach_then_ask again with a non-null Clojure "
+                     "source and the same pairing_code. Continue teaching.")
+                {:kind :must-continue})))
       (when pending
         (throw (ex-info "Cannot finish with a pending question"
                         {:kind :conflict})))

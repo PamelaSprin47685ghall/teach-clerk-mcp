@@ -33,7 +33,9 @@
       copy.hidden = true;
     }
     if (freshQuestion) {
-      input.value = "";
+      // A slow student may already be typing when the teacher follows up.
+      // Never erase a nonempty draft just because a new question appeared.
+      if (!input.value.trim()) input.value = "";
       submitting = false;
       message.textContent = "";
     }
@@ -41,8 +43,12 @@
     input.disabled = !ready;
     send.disabled = !ready || !input.value.trim();
     skip.disabled = !ready;
-    input.placeholder = ended ? "本节课已经结束" : pending ? "在这里回答老师..." : "老师正在准备下一步...";
-    indicator.textContent = ended ? "课程结束" : pending ? "轮到你了" : "老师正在准备";
+    input.placeholder = ended ? "本节课已经结束" :
+      next.student_timed_out ? "不着急，你仍然可以回答刚才的问题..." :
+      pending ? "在这里回答老师..." : "老师正在准备下一步...";
+    indicator.textContent = ended ? "课程结束" :
+      next.student_timed_out ? "可以继续思考、随时回答" :
+      pending ? "轮到你了" : "老师正在准备";
     if (freshQuestion && ready) input.focus();
   }
 

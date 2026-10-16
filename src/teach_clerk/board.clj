@@ -52,10 +52,12 @@
   (clerk/present (view-value value))
   value)
 
-(defn- event-blocks [{:keys [role value text]}]
+(defn- event-blocks [{:keys [role value text silent?]}]
   (case role
-    :teacher [(clerk/html [:div {:class "text-slate-500 text-xs font-semibold"} "老师"])
-              (view-value value)]
+    :teacher (if silent?
+               []
+               [(clerk/html [:div {:class "text-slate-500 text-xs font-semibold"} "老师"])
+                (view-value value)])
     :student [(clerk/html [:div {:class "text-slate-500 text-xs font-semibold"} "学生"])
               (clerk/html [:div {:class "border border-slate-200 rounded-xl p-3 bg-slate-50"}
                            (if (nil? text) "（跳过回答）" text)])]
