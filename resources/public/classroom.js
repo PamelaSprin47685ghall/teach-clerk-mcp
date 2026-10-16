@@ -20,6 +20,14 @@
   let revision = -1;
   let follow = true;
 
+  function pairingPrompt(code) {
+    // Do not force an @-mention. Composer mentions are a different ChatGPT
+    // extension from model-callable MCP tools and are not supported on all
+    // ChatGPT clients. An explicit tool name works in an already connected chat.
+    return "我的配对码是 " + code +
+      "。请使用已连接的 Teach Clerk 工具 teach_then_ask 让我学习：";
+  }
+
   function applyStatus(next) {
     if (typeof next.revision === "number" && next.revision < revision) return;
     if (typeof next.revision === "number") revision = next.revision;
@@ -133,9 +141,7 @@
 
   copy.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(
-        "我的配对码是 " + pairingCode + "，请使用 @Teach Clerk 让我学习:"
-      );
+      await navigator.clipboard.writeText(pairingPrompt(pairingCode));
       copy.textContent = "已复制 ✓";
     } catch {
       copy.textContent = "复制失败，请手动选择文字";
@@ -153,8 +159,7 @@
     tabToken = room.tab_token;
     pairingCode = room.pairing_code;
     codeDisplay.textContent = pairingCode;
-    prompt.textContent =
-      "我的配对码是 " + pairingCode + "，请使用 @Teach Clerk 让我学习:";
+    prompt.textContent = pairingPrompt(pairingCode);
     copy.disabled = false;
     board.removeAttribute("srcdoc");
     board.src = "/_clerk?tab=" + encodeURIComponent(tabToken);

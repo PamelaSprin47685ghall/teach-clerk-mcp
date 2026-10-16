@@ -83,7 +83,19 @@ def main():
     assert metadata["token_endpoint_auth_methods_supported"] == ["none"]
     assert metadata["authorization_response_iss_parameter_supported"] is True
 
-    assert mcp("tools/list")["result"]["tools"][0]["name"] == "teach_then_ask"
+    discovered = mcp("tools/list")["result"]["tools"]
+    assert discovered[0]["name"] == "teach_then_ask"
+    launch = next(t for t in discovered if t["name"] == "open_teach_clerk")
+    assert launch["_meta"]["ui"]["visibility"] == ["app"]
+    entrypoints = {e["type"] for e in launch["_meta"]["openai/ui"]["entrypoints"]}
+    assert entrypoints == {"thread", "global"}
+    assert launch["inputSchema"]["properties"] == {}
+    available = mcp("resources/list")["result"]["resources"]
+    uri = "ui://teach-clerk/classroom-entry-v1"
+    assert any(x["uri"] == uri for x in available)
+    resource = mcp("resources/read", {"uri": uri})["result"]["contents"][0]
+    assert resource["mimeType"] == "text/html;profile=mcp-app"
+    assert "teach_then_ask" in resource["text"]
     denied, denied_headers, _ = request("/mcp", {
         "jsonrpc": "2.0", "method": "tools/call", "id": 17,
         "params": {"name": "teach_then_ask",
@@ -135,6 +147,12 @@ def main():
     access = issued["access_token"]
     refresh = issued["refresh_token"]
     assert mcp("tools/list", token=access)["result"]["tools"][0]["name"] == "teach_then_ask"
+    for n in range(3):
+        opened = mcp("tools/call",
+                     {"name": "open_teach_clerk", "arguments": {}},
+                     token=access, id=60 + n)
+        assert opened["result"]["structuredContent"]["connected"] is True
+        assert mcp("tools/list", token=access)["result"]["tools"][0]["name"] == "teach_then_ask"
     code, _, _ = request("/oauth/token", form(params))
     assert code == 400, "The authorization code was replayed"
     code, _, body = request(

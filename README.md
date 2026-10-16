@@ -10,7 +10,8 @@ browser tab owns a private, in-memory Clerk Notebook.
    credentials need to be entered. Confirm the browser consent screen.
 2. Open https://teach-clerk-mcp.onrender.com/ in another browser tab.
    A private Notebook and a six-digit pairing code appear.
-3. Copy the prompt into ChatGPT: **我的配对码是 XXXXXX，请使用 @Teach Clerk 让我学习:**
+3. Copy the prompt into the ChatGPT conversation in which Teach Clerk is
+   connected: **我的配对码是 XXXXXX。请使用已连接的 Teach Clerk 工具 teach_then_ask 让我学习：**
    Replace XXXXXX with the code in that tab. Append the desired lesson goal.
 4. ChatGPT calls the sole tool, teach_then_ask, with pairing_code and source.
    The source is a Clojure expression which evaluates to Clerk content.
@@ -22,6 +23,21 @@ The browser tab, not an account, identifies the student. Every page load
 creates an independent, ephemeral room. Closing the tab sends a cleanup
 message, and abandoned rooms have a 20-minute idle timeout. Pairing binds
 the room to the first anonymous OAuth grant that uses its code.
+
+### ChatGPT conversation entrypoints
+
+ChatGPT distinguishes model-callable MCP tools from manually opened plugin
+entrypoints. This server advertises one **model-visible teaching tool**,
+teach_then_ask, and one **app-only UI entrypoint**, open_teach_clerk, with
+thread and global metadata. The entrypoint has no teaching effect: it simply
+opens a small connection guide. MCP resources/list and resources/read expose
+the static text/html;profile=mcp-app resource required by the host.
+
+ChatGPT clients differ in whether their composer supports @-mentions. There
+is no need to manually @-mention the plugin on every round; after connecting
+it, ChatGPT can invoke teach_then_ask throughout the same conversation.
+Existing ChatGPT connections may cache the old tools/list metadata, so the
+user may have to refresh the plugin connection to pick up entrypoints.
 
 ## MCP API
 

@@ -7,7 +7,8 @@
             [teach-clerk.rooms :as rooms]
             [teach-clerk.board :as board]
             [teach-clerk.notebooks :as notebooks]
-            [teach-clerk.sandbox :as sandbox])
+            [teach-clerk.sandbox :as sandbox]
+            [teach-clerk.entrypoint :as entrypoint])
   (:import [java.util.concurrent Executors ScheduledExecutorService TimeUnit]))
 
 (defonce !streams (atom #{}))
@@ -129,7 +130,8 @@
                             :maxLength 20000
                             :description "Single Clojure expression, or null to end lesson"}}
                   :required ["pairing_code" "source"]
-                  :additionalProperties false}}])
+                  :additionalProperties false}}
+   (entrypoint/tool)])
 
 (defn- check-pairing! [principal code]
   ;; Six decimal digits are easy to guess. Limit failed attempts per OAuth
@@ -314,7 +316,8 @@
                  (if (contains? #{"2025-11-25" "2025-06-18" "2025-03-26"}
                                 (get params "protocolVersion"))
                    (get params "protocolVersion") "2025-11-25")
-                 :capabilities {:tools {:listChanged false}}
+                 :capabilities {:tools {:listChanged false}
+                                :resources {:listChanged false}}
                  :serverInfo {:name "teach-clerk-mcp" :version "0.2.0"}
                  :instructions
                  (str "You are the teacher. Preserve the student's learning GOAL "
@@ -330,11 +333,27 @@
           (= "ping" method) (oauth/json-response 200 (rpc id {}))
           (= "tools/list" method)
           (oauth/json-response 200 (rpc id {:tools (tools)}))
+          (= "resources/list" method)
+          (oauth/json-response 200
+                               (rpc id {:resources [(entrypoint/resource)]}))
+          (= "resources/read" method)
+          (if (= entrypoint/uri (get params "uri"))
+            (oauth/json-response 200
+                                 (rpc id (entrypoint/read-resource)))
+            (oauth/json-response 200
+                                 (rpc-error id -32002 "Resource not found")))
           (= "tools/call" method)
           (let [args (get params "arguments")
                 name (get params "name")]
             (cond
               (nil? principal) (challenge)
+              (= "open_teach_clerk" name)
+              (if (or (nil? args) (= args {}))
+                (oauth/json-response 200
+                                     (rpc id (entrypoint/open-result)))
+                (oauth/json-response
+                 200 (rpc id (tool-error
+                              "Classroom entrypoint only accepts {}"))))
               (not= "teach_then_ask" name)
               (oauth/json-response 200 (rpc id (tool-error "Unknown tool")))
               (or (not (map? args))
