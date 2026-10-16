@@ -102,4 +102,5 @@ worker pool. **It is not a security sandbox against hostile code.**
 In-memory lesson state, pairing codes and pending OAuth codes are lost on a
 restart. Signed access/refresh tokens stay valid while the OAuth signing
 secret is unchanged; rotating it revokes all grants. The room limit is 120.
+Each Notebook also has a one-million-character stored-content budget.
 Render's free instance can sleep, restart, or run out of memory under load.

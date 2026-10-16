@@ -7,6 +7,7 @@
 (def ^SecureRandom rng (SecureRandom.))
 (def max-rooms 120)
 (def idle-ms (* 20 60 1000))
+(def max-notebook-chars 1000000)
 (defn now [] (System/currentTimeMillis))
 (defn random-token []
   (let [b (byte-array 24)]
@@ -35,6 +36,7 @@
           room {:token token
                 :code code
                 :state (atom {:events [] :next-id 1 :pending nil
+                              :content-chars 0
                               :closed? false :revision 0 :principal nil})
                 :last-seen (atom (now))
                 :view (atom nil)
@@ -68,10 +70,14 @@
 
 (defn begin! [room source value]
   (locking (:state room)
-    (let [{:keys [pending closed? next-id]} (snapshot room)]
+    (let [{:keys [pending closed? next-id content-chars]} (snapshot room)
+          added (+ (count source) (count (pr-str value)))]
       (when (or pending closed?)
         (throw (ex-info (if closed? "Lesson ended" "Question already pending")
                         {:kind :conflict})))
+      (when (> (+ content-chars added) max-notebook-chars)
+        (throw (ex-info "This Notebook is full. Open a new classroom tab."
+                        {:kind :capacity})))
       (let [reply (promise)
             done (java.util.concurrent.CompletableFuture.)]
         (swap! (:state room)
@@ -80,6 +86,7 @@
                      (update :events conj {:id next-id :role :teacher
                                            :source source :value value})
                      (assoc :pending {:id next-id :reply reply :done done})
+                     (update :content-chars + added)
                      (update :next-id inc)
                      (update :revision inc))))
         (touch! room)

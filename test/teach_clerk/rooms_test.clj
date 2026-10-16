@@ -41,3 +41,12 @@
     (is (true? (rooms/discard! room)))
     (is (= ::rooms/abandoned @(:reply pending)))
     (is (nil? (rooms/by-token (:token room))))))
+
+(deftest lesson-content-budget
+  (rooms/reset-for-tests!)
+  (let [room (rooms/create!)]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (rooms/begin! room "(clerk/md ...)"
+                               (apply str (repeat 1000001 "x")))))
+    (is (empty? (:events (rooms/snapshot room))))
+    (rooms/discard! room)))
