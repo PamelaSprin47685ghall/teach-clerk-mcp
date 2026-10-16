@@ -132,10 +132,11 @@ async function run() {
   const first = call(students[0].pairing_code,
                      '[(clerk/md "## 实时增量验证") (clerk/table {:head ["甲" "乙"] :rows [[1 2]]})]', 101);
   const question = await waitForPending(students[0].tab_token);
-  await sleep(150);
-  assert.ok(received[0].some(x => x.includes("patch-state!")),
+  assert.ok(await eventually(() =>
+              received[0].some(x => x.includes("patch-state!")), 15000),
             "Clerk did not send a patch-state! message");
-  assert.ok(received[0].some(x => x.includes("table-markup-viewer")),
+  assert.ok(await eventually(() =>
+              received[0].some(x => x.includes("table-markup-viewer")), 15000),
             "A table returned inside a vector must be a rendered Clerk viewer");
   assert.ok(received[0].every(x => !x.includes(":teach/value")),
             "Raw generated viewer maps must never reach the browser");
@@ -173,5 +174,5 @@ async function run() {
 
 run().catch(error => {
   console.error(error);
-  process.exitCode = 1;
+  process.exit(1);
 });
