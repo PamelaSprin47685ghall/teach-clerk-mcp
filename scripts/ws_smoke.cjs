@@ -130,11 +130,15 @@ async function run() {
     })));
 
   const first = call(students[0].pairing_code,
-                     '(clerk/md "## 实时增量验证")', 101);
+                     '[(clerk/md "## 实时增量验证") (clerk/table {:head ["甲" "乙"] :rows [[1 2]]})]', 101);
   const question = await waitForPending(students[0].tab_token);
   await sleep(150);
   assert.ok(received[0].some(x => x.includes("patch-state!")),
             "Clerk did not send a patch-state! message");
+  assert.ok(received[0].some(x => x.includes("table-markup-viewer")),
+            "A table returned inside a vector must be a rendered Clerk viewer");
+  assert.ok(received[0].every(x => !x.includes(":teach/value")),
+            "Raw generated viewer maps must never reach the browser");
   assert.equal(received[1].length, 0, "Other student received a patch");
   const beforeReply = received[0].length;
   await json("/api/answer", {

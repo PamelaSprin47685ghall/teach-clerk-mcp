@@ -82,6 +82,17 @@ There is no background LLM request and no extra JVM.
 Viewer types: md, tex, code, table, restricted Hiccup/SVG html,
 plotly, vl, fragment, row, and col.
 
+For generated multi-part lessons, the source may return a vector or a
+sequence of Clerk viewers directly, e.g.:
+
+    [(clerk/md "## 乘法表")
+     (clerk/table (mapv (fn [i] (mapv #(* i %) (range 1 5)))
+                        (range 1 5)))
+     (clerk/md "观察每一行的规律。")]
+
+Such collections become an implicit Clerk fragment and render each viewer
+normally. Ordinary data vectors such as [1 2 3] remain plain data.
+
 ## Isolated, incremental Clerk Notebooks
 
 One Clerk Notebook template is initialized when Java starts. Each browser

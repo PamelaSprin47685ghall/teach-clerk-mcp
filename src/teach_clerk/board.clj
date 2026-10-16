@@ -30,8 +30,19 @@
     (or (string? x) (number? x) (nil? x)) x
     :else (str x)))
 
+(defn- generated-view? [value]
+  (and (map? value) (contains? value :teach/view)))
+
+(defn- contains-generated-view? [value]
+  (cond
+    (generated-view? value) true
+    (sequential? value) (boolean (some contains-generated-view? value))
+    (map? value) (boolean (some contains-generated-view? (vals value)))
+    :else false))
+
 (defn- view-value [value]
-  (if (and (map? value) (contains? value :teach/view))
+  (cond
+    (generated-view? value)
     (let [{:keys [teach/view teach/value]} value]
       (case view
         :md (clerk/md (str value))
@@ -45,7 +56,21 @@
         :row (apply clerk/row (map view-value value))
         :col (apply clerk/col (map view-value value))
         (throw (ex-info "Unsupported Clerk viewer" {:kind view}))))
-    value))
+
+    ;; Clojure generators frequently return a vector of Clerk elements rather
+    ;; than explicitly calling clerk/fragment. Turn those results into a real
+    ;; Clerk fragment so its notebook result renderer can splice each element.
+    ;; Plain data vectors (e.g. [1 2 3]) retain their usual Clerk rendering.
+    (and (sequential? value) (contains-generated-view? value))
+    (apply clerk/fragment (map view-value value))
+
+    ;; Also convert elements nested in maps without changing their data keys.
+    (and (map? value) (contains-generated-view? value))
+    (into (empty value)
+          (map (fn [[k v]] [k (view-value v)]))
+          value)
+
+    :else value))
 
 (defn validate-value! [value]
   ;; Present the new result before appending it to the immutable board.

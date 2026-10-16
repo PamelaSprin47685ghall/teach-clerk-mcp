@@ -380,7 +380,10 @@ def main():
 
         answers = [None, None]
         questions = [
-            '(clerk/md "## 第一位同学的唯一问题 A")',
+            ('[(clerk/md "## 第一位同学的唯一问题 A") '
+             '(clerk/table {:head ["第一列" "第二列"] '
+             ':rows [["乘法" "生成器"]]}) '
+             '(clerk/md "### 从表格中观察规律")]'),
             '(clerk/md "## 第二位同学的唯一问题 B")'
         ]
 
@@ -418,6 +421,10 @@ def main():
             assert status == 200
             assert "唯一问题 " + ("A" if i == 0 else "B") in html
             assert "唯一问题 " + ("B" if i == 0 else "A") not in html
+            assert ":teach/value" not in html, "Generated viewers leaked as raw EDN"
+            if i == 0:
+                assert "table-markup-viewer" in html
+                assert "从表格中观察规律" in html
 
         for i, student in enumerate(students):
             status, _, body = request(
