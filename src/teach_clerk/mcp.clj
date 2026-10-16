@@ -21,6 +21,22 @@
 (defn tool-error [message]
   {:isError true :content [{:type "text" :text message}]})
 
+(defn- send-payload! [channel sse? id value]
+  (try
+    (let [payload (rpc id value)]
+      (http/send! channel
+                  (if sse?
+                    (str "event: message\ndata: "
+                         (json/write-str payload) "\n\n")
+                    (oauth/json-response 200 payload))
+                  true))
+    (catch Throwable _ nil)
+    (finally (swap! !streams disj channel))))
+
+(defn- send-error! [channel sse? id error]
+  (send-payload! channel sse? id
+                 (tool-error (or (ex-message error) "Teaching failed"))))
+
 (defn tools []
   [{:name "teach_then_ask"
     :title "用 Clerk 动态板书授课，等待学生回答"
@@ -100,47 +116,40 @@
               (swap! !streams conj ch))
             (future
               (try
-                (let [answer
-                      (if (nil? source)
-                        (do (rooms/finish! room)
-                            (notebooks/refresh! room)
-                            (notebooks/publish-status! room)
-                            {:student_reply nil :closed true})
-                        (let [value (board/validate-value!
-                                     (sandbox/evaluate! source))]
-                          (when-not (= room (rooms/by-token (:token room)))
-                            (throw (ex-info "Student has closed the tab" {})))
-                          (when-not @!connected
-                            (throw (ex-info "MCP client disconnected" {})))
-                          (let [{:keys [id reply]} (rooms/begin! room source value)]
-                            (reset! !question-id id)
-                            (when-not @!connected (rooms/abandon! room id))
-                            (notebooks/refresh! room)
-                            (notebooks/publish-status! room)
-                            (let [student-reply @reply]
-                              (when (= ::rooms/abandoned student-reply)
-                                (throw (ex-info "MCP call was cancelled" {})))
-                              {:student_reply student-reply :closed false}))))
-                      payload (rpc id (result answer))]
-                  (http/send! ch
-                              (if sse?
-                                (str "event: message\ndata: "
-                                     (json/write-str payload) "\n\n")
-                                (oauth/json-response 200 payload))
-                              true))
+                (if (nil? source)
+                  (do
+                    (rooms/finish! room)
+                    (notebooks/refresh! room)
+                    (notebooks/publish-status! room)
+                    (send-payload! ch sse? id
+                                   (result {:student_reply nil :closed true})))
+                  (let [value (board/validate-value!
+                               (sandbox/evaluate! source))]
+                    (when-not (= room (rooms/by-token (:token room)))
+                      (throw (ex-info "Student has closed the tab" {})))
+                    (when-not @!connected
+                      (throw (ex-info "MCP client disconnected" {})))
+                    (let [{q-id :id done :done} (rooms/begin! room source value)]
+                      (reset! !question-id q-id)
+                      (.whenComplete
+                       ^java.util.concurrent.CompletableFuture done
+                       (reify java.util.function.BiConsumer
+                         (accept [_ reply failure]
+                           (cond
+                             failure
+                             (send-error! ch sse? id failure)
+                             (= ::rooms/abandoned reply)
+                             (send-error! ch sse? id
+                                          (ex-info "Classroom was closed" {}))
+                             :else
+                             (send-payload! ch sse? id
+                                            (result {:student_reply reply
+                                                     :closed false}))))))
+                      (when-not @!connected (rooms/abandon! room q-id))
+                      (notebooks/refresh! room)
+                      (notebooks/publish-status! room))))
                 (catch Throwable e
-                  (try
-                    (let [payload (rpc id (tool-error
-                                           (or (ex-message e) "Teaching failed")))]
-                      (http/send! ch
-                                  (if sse?
-                                    (str "event: message\ndata: "
-                                         (json/write-str payload) "\n\n")
-                                    (oauth/json-response 200 payload))
-                                  true))
-                    (catch Throwable _ nil)))
-                (finally
-                  (swap! !streams disj ch)))))
+                  (send-error! ch sse? id e)))))
           :on-close
           (fn [ch _]
             (swap! !streams disj ch)
@@ -153,6 +162,13 @@
   (doseq [ch @!streams]
     (try (http/send! ch ": waiting for student\n\n" false)
          (catch Throwable _ (swap! !streams disj ch)))))
+
+(defn reap-failures! []
+  (let [now (System/currentTimeMillis)]
+    (swap! !pair-failures
+           (fn [entries]
+             (into {} (filter (fn [[_ v]]
+                                (< (- now (:since v)) 60000)) entries))))))
 
 (defn- parse-request [req]
   (let [s (slurp (:body req))]

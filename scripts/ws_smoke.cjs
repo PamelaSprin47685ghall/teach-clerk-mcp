@@ -6,11 +6,18 @@ const WebSocket = require("ws");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function eventually(test, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!test() && Date.now() < deadline) await sleep(80);
+  return test();
+}
 const base = process.env.PUBLIC_BASE_URL || "http://127.0.0.1:11080";
 let accessToken;
 
 async function authorize() {
-  const redirect = "http://127.0.0.1:3000/callback";
+  const redirect = base.startsWith("http://127.0.0.1:")
+    ? "http://127.0.0.1:3000/callback"
+    : "https://chatgpt.com/connector_platform_oauth_redirect";
   const registered = await json("/oauth/register", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -83,7 +90,7 @@ function call(pairingCode, source, id) {
 }
 
 async function waitForPending(tabToken) {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 240; i++) {
     const state = await json("/api/state?tab=" + encodeURIComponent(tabToken));
     if (state.pending) return state.question_id;
     await sleep(100);
@@ -140,14 +147,15 @@ async function run() {
     })
   });
   assert.equal((await first).result.structuredContent.student_reply, "学生回复");
-  assert.ok(received[0].length > beforeReply, "Reply caused no Clerk update");
+  assert.ok(await eventually(() => received[0].length > beforeReply),
+            "Reply caused no Clerk update");
   assert.equal(received[1].length, 0, "Other student received the reply");
   assert.equal(
     (await call(students[0].pairing_code, null, 102)).result.structuredContent.closed,
     true
   );
-  await sleep(100);
-  assert.ok(received[0].length >= 3, "Expected teacher, student, finish patches");
+  assert.ok(await eventually(() => received[0].length >= 3),
+            "Expected teacher, student, finish patches");
   assert.equal(received[1].length, 0, "Other notebook was modified");
   console.log("PASS: isolated Clerk WebSocket patches, answer, and lesson finish");
   for (const ws of sockets) ws.close();

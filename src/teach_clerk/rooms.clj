@@ -72,17 +72,18 @@
       (when (or pending closed?)
         (throw (ex-info (if closed? "Lesson ended" "Question already pending")
                         {:kind :conflict})))
-      (let [reply (promise)]
+      (let [reply (promise)
+            done (java.util.concurrent.CompletableFuture.)]
         (swap! (:state room)
                (fn [s]
                  (-> s
                      (update :events conj {:id next-id :role :teacher
                                            :source source :value value})
-                     (assoc :pending {:id next-id :reply reply})
+                     (assoc :pending {:id next-id :reply reply :done done})
                      (update :next-id inc)
                      (update :revision inc))))
         (touch! room)
-        {:id next-id :reply reply}))))
+        {:id next-id :reply reply :done done}))))
 
 (defn answer! [room id text]
   (locking (:state room)
@@ -100,6 +101,7 @@
                    (update :revision inc))))
       (touch! room)
       (deliver (:reply pending) text)
+      (.complete ^java.util.concurrent.CompletableFuture (:done pending) text)
       text)))
 
 (defn abandon! [room id]
@@ -115,6 +117,8 @@
                        (update :next-id inc)
                        (update :revision inc))))
           (deliver (:reply pending) ::abandoned)
+          (.complete ^java.util.concurrent.CompletableFuture
+                     (:done pending) ::abandoned)
           true)))))
 
 (defn finish! [room]

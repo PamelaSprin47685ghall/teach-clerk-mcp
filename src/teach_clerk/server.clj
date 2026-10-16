@@ -222,6 +222,13 @@
                (try
                  (rooms/reap!)
                  (mcp/keepalive!)
+                 (mcp/reap-failures!)
+                 (let [now (rooms/now)]
+                   (swap! !created-per-ip
+                          (fn [entries]
+                            (into {} (filter (fn [[_ v]]
+                                               (< (- now (:since v)) 60000))
+                                             entries)))))
                  (doseq [room (vals (:tokens @rooms/!all))]
                    (when (or (seq @(:sockets room))
                              (seq @(:streams room)))

@@ -90,7 +90,9 @@ def main():
                    "arguments": {"pairing_code": "000000", "source": None}}
     })
     assert denied == 401
-    assert "resource_metadata" in denied_headers.get("Www-Authenticate", "")
+    challenge = next((v for k, v in denied_headers.items()
+                      if k.lower() == "www-authenticate"), "")
+    assert "resource_metadata" in challenge, denied_headers
 
     code, _, body = request(
         "/oauth/register", {"redirect_uris": [CALLBACK],
@@ -112,7 +114,7 @@ def main():
     assert code == 200 and "同意连接 ChatGPT" in page
     code, headers, _ = request("/oauth/authorize", form(values))
     assert code == 302, (code, headers)
-    location = headers["Location"]
+    location = next(v for k, v in headers.items() if k.lower() == "location")
     redirect = urllib.parse.parse_qs(urllib.parse.urlparse(location).query)
     assert redirect["iss"][0] == RESOURCE
     assert redirect["state"][0] == values["state"]
