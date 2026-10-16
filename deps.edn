@@ -2,6 +2,8 @@
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}
         io.github.nextjournal/clerk {:mvn/version "0.18.1158"}
         org.babashka/sci {:mvn/version "0.15.58"}
+        borkdude/edamame {:mvn/version "1.6.42"}
+        juji/editscript {:mvn/version "0.6.4"}
         org.clojure/data.json {:mvn/version "2.5.1"}
         http-kit/http-kit {:mvn/version "2.8.0"}}
  :aliases {:run {:main-opts ["-m" "teach-clerk.main"]}

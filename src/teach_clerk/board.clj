@@ -2,7 +2,7 @@
   {:nextjournal.clerk/visibility {:code :hide :result :hide}
    :nextjournal.clerk/no-cache true}
   (:require [nextjournal.clerk :as clerk]
-            [teach-clerk.state :as state]))
+            [teach-clerk.rooms :as rooms]))
 
 (def svg-tags
   #{:svg :g :path :circle :rect :line :polyline :polygon :ellipse :text})
@@ -63,7 +63,10 @@
     :finished [(clerk/md "---\n\n**本节课结束。**")]
     []))
 
+(defn lesson-value [room]
+  (apply clerk/fragment
+         (concat [(clerk/md "# 课堂白板")]
+                 (mapcat event-blocks (:events (rooms/snapshot room))))))
+
 ^{::clerk/visibility {:code :hide :result :show}}
-(apply clerk/fragment
-       (concat [(clerk/md "# 课堂白板")]
-               (mapcat event-blocks (:events (state/snapshot)))))
+(clerk/md "# 课堂白板")

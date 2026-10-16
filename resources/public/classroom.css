@@ -7,6 +7,15 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 .brand .logo { font-size: 23px; color: #725ad2; }
 .subtitle { font-size: 12px; color: #87909d; padding-left: 10px; border-left: 1px solid #dde1e7; }
 .status { border-radius: 9px; padding: 5px 9px; font-size: 12px; background: #f5f6f8; color: #626c79; }
+.pairing { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px max(18px, calc((100% - 900px)/2)); background: #f8f8fc; border-bottom: 1px solid #e9e7f1; }
+.pairing-copy { min-width: 0; }
+.pairing-label { color: #62647a; font-size: 13px; margin-right: 9px; }
+#pairing-code { font: 700 24px ui-monospace, monospace; letter-spacing: 3px; color: #5e46bd; }
+.pairing-instruction { font-size: 12px; color: #727587; margin-left: 12px; }
+#pairing-prompt { margin: 7px 0 0; font-size: 13px; color: #52536e; overflow-wrap: anywhere; }
+.pairing button { white-space: nowrap; }
+.pairing.paired { background: #f6faf8; }
+.pairing.paired #pairing-code { color: #33815e; }
 .canvas { flex: 1 1 auto; min-height: 0; position: relative; background: #fff; }
 #board { width: 100%; height: 100%; border: none; display: block; }
 .to-bottom { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); border: 1px solid #dbe0e8; background: #fff; color: #354057; border-radius: 20px; padding: 7px 15px; box-shadow: 0 3px 14px #26355218; cursor: pointer; }
@@ -24,4 +33,4 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .primary { background: #292b35; color: #fff; border: 1px solid #292b35; }
 .secondary { background: #fff; color: #525f6b; border: 1px solid #dde1e7; }
 .message { height: 14px; margin: 3px 2px 0; font-size: 12px; color: #9a4b4b; }
-@media (max-width: 580px) { .subtitle, .hint { display: none; } .topbar { padding: 0 14px; } .composer { padding: 10px 12px 14px; } }
+@media (max-width: 580px) { .subtitle, .hint { display: none; } .topbar { padding: 0 14px; } .composer { padding: 10px 12px 14px; } .pairing { padding: 11px 12px; align-items: flex-start; flex-direction: column; gap: 8px; } .pairing-instruction { display: block; margin: 6px 0 0; } }

@@ -1,5 +1,5 @@
 (ns teach-clerk.worker
-  "A disposable JVM that evaluates a restricted Clojure teaching expression."
+  "SCI evaluation in the shared JVM. Results are plain data, never executable browser code."
   (:require [sci.core :as sci]))
 
 (defn- view [kind]
@@ -30,9 +30,12 @@
       (mapv #(all-data % (inc depth)) checked))
     :else (throw (ex-info "Result is not plain Clojure data" {:type (str (type value))}))))
 
-(defn evaluate [source]
+(defn evaluate
+  ([source] (evaluate source {}))
+  ([source core-overrides]
   (let [output (java.io.StringWriter.)
-        bindings {'clerk {'md (view :md)
+        bindings {'clojure.core core-overrides
+                  'clerk {'md (view :md)
                           'tex (view :tex)
                           'code (view :code)
                           'html (view :html)
@@ -48,20 +51,4 @@
             serialized (pr-str plain)]
         (when (> (count serialized) 250000)
           (throw (ex-info "Rendered value is too large" {})))
-        plain))))
-
-(defn -main []
-  (let [reader (java.io.BufferedReader.
-                (java.io.InputStreamReader. System/in java.nio.charset.StandardCharsets/UTF_8))
-        writer (java.io.BufferedWriter.
-                (java.io.OutputStreamWriter. System/out java.nio.charset.StandardCharsets/UTF_8))]
-    (doseq [line (line-seq reader)]
-      (let [response (try
-                       (let [bytes (.decode (java.util.Base64/getDecoder) line)
-                             source (String. bytes java.nio.charset.StandardCharsets/UTF_8)]
-                         {:ok true :value (evaluate source)})
-                       (catch Throwable e
-                         {:ok false :error (or (ex-message e) "Clojure evaluation failed")}))]
-        (.write writer (pr-str response))
-        (.newLine writer)
-        (.flush writer)))))
+        plain)))))

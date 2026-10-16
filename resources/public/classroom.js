@@ -7,6 +7,12 @@
   const skip = document.querySelector("#skip");
   const bottom = document.querySelector("#to-bottom");
   const message = document.querySelector("#message");
+  const pair = document.querySelector("#pairing");
+  const codeDisplay = document.querySelector("#pairing-code");
+  const prompt = document.querySelector("#pairing-prompt");
+  const copy = document.querySelector("#copy-prompt");
+  let tabToken = null;
+  let pairingCode = null;
   let questionId = null;
   let pending = false;
   let ended = false;
@@ -21,6 +27,11 @@
     questionId = next.question_id;
     pending = Boolean(next.pending);
     ended = Boolean(next.closed);
+    if (next.paired) {
+      pair.classList.add("paired");
+      prompt.textContent = "已配对 ChatGPT。老师可以开始授课了。";
+      copy.hidden = true;
+    }
     if (freshQuestion) {
       input.value = "";
       submitting = false;
@@ -43,7 +54,7 @@
       const res = await fetch("/api/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question_id: questionId, text }),
+        body: JSON.stringify({ tab_token: tabToken, question_id: questionId, text }),
       });
       const data = await res.json();
       if (!res.ok) throw Error(data.error || "提交失败");
@@ -107,16 +118,59 @@
   bottom.addEventListener("click", goToBottom);
 
   async function pollStatus() {
-    const response = await fetch("/api/state", { cache: "no-store" });
+    const response = await fetch(
+      "/api/state?tab=" + encodeURIComponent(tabToken), { cache: "no-store" }
+    );
     if (!response.ok) throw Error("课堂连接失效");
     applyStatus(await response.json());
   }
 
-  const stream = new EventSource("/api/events");
-  stream.addEventListener("status", event => applyStatus(JSON.parse(event.data)));
-  stream.addEventListener("error", () => {
-    indicator.textContent = "重新连接中...";
-    pollStatus().catch(() => {});
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(
+        "我的配对码是 " + pairingCode + "，请使用 @Teach Clerk 让我学习:"
+      );
+      copy.textContent = "已复制 ✓";
+    } catch {
+      copy.textContent = "复制失败，请手动选择文字";
+    }
   });
-  pollStatus().catch(() => { indicator.textContent = "连接失败"; });
+
+  async function start() {
+    const response = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (!response.ok) throw Error("暂时无法创建课堂");
+    const room = await response.json();
+    tabToken = room.tab_token;
+    pairingCode = room.pairing_code;
+    codeDisplay.textContent = pairingCode;
+    prompt.textContent =
+      "我的配对码是 " + pairingCode + "，请使用 @Teach Clerk 让我学习:";
+    copy.disabled = false;
+    board.removeAttribute("srcdoc");
+    board.src = "/_clerk?tab=" + encodeURIComponent(tabToken);
+    const stream = new EventSource(
+      "/api/events?tab=" + encodeURIComponent(tabToken)
+    );
+    stream.addEventListener("status", event => applyStatus(JSON.parse(event.data)));
+    stream.addEventListener("error", () => {
+      indicator.textContent = "重新连接中...";
+      pollStatus().catch(() => {});
+    });
+    pollStatus().catch(() => { indicator.textContent = "连接失败"; });
+  }
+
+  addEventListener("pagehide", () => {
+    if (!tabToken) return;
+    const payload = new Blob([JSON.stringify({ tab_token: tabToken })],
+                             { type: "application/json" });
+    navigator.sendBeacon("/api/close", payload);
+  });
+  start().catch(error => {
+    indicator.textContent = "课堂连接失败";
+    message.textContent = error.message;
+  });
 })();

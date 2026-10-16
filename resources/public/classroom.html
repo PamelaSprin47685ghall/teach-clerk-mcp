@@ -13,8 +13,17 @@
       <div class="brand"><span class="logo">◈</span><strong>Clerk 课堂</strong><span class="subtitle">生成式白板</span></div>
       <div id="indicator" class="status">等待老师开始</div>
     </header>
+    <aside class="pairing" id="pairing">
+      <div class="pairing-copy">
+        <span class="pairing-label">我的配对码是</span>
+        <strong id="pairing-code">······</strong>
+        <span class="pairing-instruction">复制下面的话，粘贴到已连接 Teach Clerk 的 ChatGPT：</span>
+        <p id="pairing-prompt">正在准备你的课堂...</p>
+      </div>
+      <button id="copy-prompt" class="secondary" type="button" disabled>复制到 ChatGPT ↗</button>
+    </aside>
     <div class="canvas" id="canvas">
-      <iframe id="board" title="Clerk 实时教学白板" src="/_clerk"></iframe>
+      <iframe id="board" title="Clerk 实时教学白板" srcdoc="<p style='padding:32px;color:#999;font-family:sans-serif'>正在准备白板...</p>"></iframe>
       <button id="to-bottom" class="to-bottom" type="button" hidden>回到最新内容 ↓</button>
     </div>
     <section class="composer" aria-label="学生回答">
